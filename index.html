@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIY Web Crossover (L/R Swap)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+    .card { background: #1e1e1e; padding: 20px; border-radius: 16px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+    .control { margin: 20px 0; text-align: left; }
+    label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+    input[type=range] { width: 100%; accent-color: #00e676; }
+    input[type=file] { margin-bottom: 15px; width: 100%; }
+    audio { width: 100%; margin-top: 15px; }
+    
+    .btn-swap {
+      background: #00e676;
+      color: #000;
+      border: none;
+      padding: 12px 20px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      margin: 10px 0 20px 0;
+      transition: 0.2s;
+    }
+    .btn-swap:active { transform: scale(0.98); }
+    .status-badge {
+      background: #2a2a2a;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #00e676;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>🎛️ Active Web Crossover</h2>
+    
+    <div class="status-badge" id="statusText">
+      📍 Status: <b>Left = Sub</b> | <b>Right = Mid</b>
+    </div>
+
+    <button class="btn-swap" id="swapBtn">🔄 Tukar Channel (Swap L/R)</button>
+
+    <input type="file" id="audioFile" accept="audio/*">
+    <audio id="audioPlayer" controls></audio>
+
+    <hr style="border-color: #333; margin: 20px 0;">
+
+    <div class="control">
+      <label id="lpfLabel">Cutoff Sub (Low-Pass): 120 Hz</label>
+      <input type="range" id="lpfFreq" min="40" max="250" value="120">
+    </div>
+
+    <div class="control">
+      <label id="hpfLabel">Cutoff Mid (High-Pass): 120 Hz</label>
+      <input type="range" id="hpfFreq" min="80" max="1000" value="120">
+    </div>
+  </div>
+
+  <script>
+    const audioPlayer = document.getElementById('audioPlayer');
+    const audioFile = document.getElementById('audioFile');
+    const lpfFreq = document.getElementById('lpfFreq');
+    const hpfFreq = document.getElementById('hpfFreq');
+    const swapBtn = document.getElementById('swapBtn');
+    const statusText = document.getElementById('statusText');
+
+    let audioCtx, source, lpf, hpf, merger;
+    let isSwapped = false; // State status swap (false = Normal, true = Swapped)
+
+    // Load file audio lokal
+    audioFile.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        audioPlayer.src = URL.createObjectURL(file);
+      }
+    });
+
+    // Fungsi untuk menghubungkan ulang alur audio (Routing Filter ke Left/Right)
+    function updateRouting() {
+      if (!merger) return;
+
+      // Putus dulu semua koneksi lama dari filter ke merger
+      lpf.disconnect();
+      hpf.disconnect();
+
+      if (!isSwapped) {
+        // Mode Normal: LPF -> Left (0), HPF -> Right (1)
+        lpf.connect(merger, 0, 0); 
+        hpf.connect(merger, 0, 1); 
+        statusText.innerHTML = "📍 Status: <b>Left = Sub</b> | <b>Right = Mid</b>";
+      } else {
+        // Mode Swapped: HPF -> Left (0), LPF -> Right (1)
+        hpf.connect(merger, 0, 0); 
+        lpf.connect(merger, 0, 1); 
+        statusText.innerHTML = "🔄 Status: <b>Left = Mid</b> | <b>Right = Sub</b>";
+      }
+    }
+
+    // Inisialisasi Web Audio API saat musik diputar
+    audioPlayer.addEventListener('play', () => {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaElementSource(audioPlayer);
+
+        // 1. Buat Filter Low-Pass (Subwoofer)
+        lpf = audioCtx.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.value = lpfFreq.value;
+
+        // 2. Buat Filter High-Pass (Mid/High)
+        hpf = audioCtx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = hpfFreq.value;
+
+        // 3. Buat Channel Merger (Output Stereo)
+        merger = audioCtx.createChannelMerger(2);
+
+        // Sambungkan Sinyal Utama ke Filter
+        source.connect(lpf);
+        source.connect(hpf);
+
+        // Atur Routing Sesuai Status
+        updateRouting();
+
+        // Merger -> Output Ke Speaker / Audio HP
+        merger.connect(audioCtx.destination);
+      }
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    });
+
+    // Tombol Swap Ditogel (Diklik)
+    swapBtn.addEventListener('click', () => {
+      isSwapped = !isSwapped; // Balikkan nilai true/false
+      updateRouting();
+    });
+
+    // Update Frekuensi LPF secara Real-time
+    lpfFreq.addEventListener('input', (e) => {
+      document.getElementById('lpfLabel').innerText = `Cutoff Sub (Low-Pass): ${e.target.value} Hz`;
+      if (lpf) lpf.frequency.value = e.target.value;
+    });
+
+    // Update Frekuensi HPF secara Real-time
+    hpfFreq.addEventListener('input', (e) => {
+      document.getElementById('hpfLabel').innerText = `Cutoff Mid (High-Pass): ${e.target.value} Hz`;
+      if (hpf) hpf.frequency.value = e.target.value;
+    });
+  </script>
+</body>
+</html>
