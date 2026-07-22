@@ -3,37 +3,249 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DIY Web Crossover (L/R Swap)</title>
+  <title>DIY Web DSP: Crossover & Tone Control</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
-    .card { background: #1e1e1e; padding: 20px; border-radius: 16px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
-    .control { margin: 20px 0; text-align: left; }
-    label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; margin: 0; }
+    .card { background: #1e1e1e; padding: 24px; border-radius: 16px; max-width: 420px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+    
+    .mode-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+    .btn-mode { flex: 1; padding: 12px; border: 2px solid #333; background: #2a2a2a; color: #888; font-weight: bold; border-radius: 10px; cursor: pointer; transition: 0.2s; }
+    .btn-mode.active { background: #00e676; color: #000; border-color: #00e676; }
+
+    .control { margin: 18px 0; text-align: left; }
+    label { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-bottom: 6px; }
     input[type=range] { width: 100%; accent-color: #00e676; }
     input[type=file] { margin-bottom: 15px; width: 100%; }
-    audio { width: 100%; margin-top: 15px; }
+    audio { width: 100%; margin-top: 10px; }
     
-    .btn-swap {
-      background: #00e676;
-      color: #000;
-      border: none;
-      padding: 12px 20px;
-      font-weight: bold;
-      border-radius: 8px;
-      cursor: pointer;
-      width: 100%;
-      margin: 10px 0 20px 0;
-      transition: 0.2s;
-    }
+    .btn-swap { background: #333; color: #00e676; border: 1px solid #00e676; padding: 10px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 15px; }
     .btn-swap:active { transform: scale(0.98); }
-    .status-badge {
-      background: #2a2a2a;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 13px;
-      color: #00e676;
-      margin-bottom: 15px;
+    
+    .panel { display: none; background: #262626; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+    .panel.active { display: block; }
+    .status-badge { font-size: 12px; color: #00e676; margin-bottom: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2 style="margin-top:0;">🎛️ DIY Audio DSP</h2>
+    
+    <!-- Tombol Saklar Mode -->
+    <div class="mode-selector">
+      <button class="btn-mode active" id="btnCrossoverMode">🔀 Crossover</button>
+      <button class="btn-mode" id="btnToneMode">🎚️ Tone Control</button>
+    </div>
+
+    <input type="file" id="audioFile" accept="audio/*">
+    <audio id="audioPlayer" controls></audio>
+
+    <hr style="border-color: #333; margin: 20px 0;">
+
+    <!-- PANEL 1: CROSSOVER MODE -->
+    <div class="panel active" id="panelCrossover">
+      <div class="status-badge" id="statusText">📍 Mode: Left = Sub | Right = Mid</div>
+      <button class="btn-swap" id="swapBtn">🔄 Tukar Channel L/R</button>
+
+      <div class="control">
+        <label><span>Cutoff Sub (Low-Pass)</span><span id="lpfVal">120 Hz</span></label>
+        <input type="range" id="lpfFreq" min="40" max="250" value="120">
+      </div>
+
+      <div class="control">
+        <label><span>Cutoff Mid (High-Pass)</span><span id="hpfVal">120 Hz</span></label>
+        <input type="range" id="hpfFreq" min="80" max="1000" value="120">
+      </div>
+    </div>
+
+    <!-- PANEL 2: TONE CONTROL MODE -->
+    <div class="panel" id="panelTone">
+      <div class="status-badge">📍 Mode: Stereo Master EQ (Bass / Mid / Treble)</div>
+      
+      <div class="control">
+        <label><span>🔊 Bass (100 Hz)</span><span id="bassVal">0 dB</span></label>
+        <input type="range" id="bassGain" min="-12" max="12" value="0" step="1">
+      </div>
+
+      <div class="control">
+        <label><span>🎙️ Midrange (1 kHz)</span><span id="midVal">0 dB</span></label>
+        <input type="range" id="midGain" min="-12" max="12" value="0" step="1">
+      </div>
+
+      <div class="control">
+        <label><span>✨ Treble (10 kHz)</span><span id="trebleVal">0 dB</span></label>
+        <input type="range" id="trebleGain" min="-12" max="12" value="0" step="1">
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const audioPlayer = document.getElementById('audioPlayer');
+    const audioFile = document.getElementById('audioFile');
+    
+    // Elements - Mode Selector
+    const btnCrossoverMode = document.getElementById('btnCrossoverMode');
+    const btnToneMode = document.getElementById('btnToneMode');
+    const panelCrossover = document.getElementById('panelCrossover');
+    const panelTone = document.getElementById('panelTone');
+
+    // Elements - Crossover
+    const lpfFreq = document.getElementById('lpfFreq');
+    const hpfFreq = document.getElementById('hpfFreq');
+    const swapBtn = document.getElementById('swapBtn');
+    const statusText = document.getElementById('statusText');
+
+    // Elements - Tone Control
+    const bassGain = document.getElementById('bassGain');
+    const midGain = document.getElementById('midGain');
+    const trebleGain = document.getElementById('trebleGain');
+
+    // Web Audio API Nodes
+    let audioCtx, source, lpf, hpf, merger;
+    let bassFilter, midFilter, trebleFilter;
+
+    let currentMode = 'crossover'; // 'crossover' atau 'tone'
+    let isSwapped = false;
+
+    // Load file audio lokal
+    audioFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) audioPlayer.src = URL.createObjectURL(file);
+    });
+
+    // Inisialisasi Audio Processing Context
+    function initAudioContext() {
+      if (audioCtx) return;
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      source = audioCtx.createMediaElementSource(audioPlayer);
+
+      // --- 1. Nodes untuk Mode Crossover ---
+      lpf = audioCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = lpfFreq.value;
+
+      hpf = audioCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = hpfFreq.value;
+
+      merger = audioCtx.createChannelMerger(2);
+
+      // --- 2. Nodes untuk Mode Tone Control (LowShelf, Peaking, HighShelf) ---
+      bassFilter = audioCtx.createBiquadFilter();
+      bassFilter.type = 'lowshelf';
+      bassFilter.frequency.value = 100; // Frekuensi Bass di 100 Hz
+
+      midFilter = audioCtx.createBiquadFilter();
+      midFilter.type = 'peaking';
+      midFilter.frequency.value = 1000; // Frekuensi Mid di 1 kHz
+      midFilter.Q.value = 1;
+
+      trebleFilter = audioCtx.createBiquadFilter();
+      trebleFilter.type = 'highshelf';
+      trebleFilter.frequency.value = 10000; // Frekuensi Treble di 10 kHz
+
+      // Sambungkan Rantai Tone Control: Source -> Bass -> Mid -> Treble
+      bassFilter.connect(midFilter);
+      midFilter.connect(trebleFilter);
+
+      applyRouting();
     }
+
+    // Fungsi Utama Routing Alur Audio berdasarkan Mode Aktif
+    function applyRouting() {
+      if (!audioCtx) return;
+
+      // Putus semua koneksi lama
+      source.disconnect();
+      lpf.disconnect();
+      hpf.disconnect();
+      trebleFilter.disconnect();
+
+      if (currentMode === 'crossover') {
+        // Mode Crossover
+        source.connect(lpf);
+        source.connect(hpf);
+
+        if (!isSwapped) {
+          lpf.connect(merger, 0, 0); // LowPass ke Left (0)
+          hpf.connect(merger, 0, 1); // HighPass ke Right (1)
+          statusText.innerHTML = "📍 Mode: <b>Left = Sub</b> | <b>Right = Mid</b>";
+        } else {
+          hpf.connect(merger, 0, 0); // HighPass ke Left (0)
+          lpf.connect(merger, 0, 1); // LowPass ke Right (1)
+          statusText.innerHTML = "🔄 Mode: <b>Left = Mid</b> | <b>Right = Sub</b>";
+        }
+
+        merger.connect(audioCtx.destination);
+      } 
+      else if (currentMode === 'tone') {
+        // Mode Tone Control (Stereo Master)
+        source.connect(bassFilter);
+        trebleFilter.connect(audioCtx.destination);
+      }
+    }
+
+    // Play Trigger
+    audioPlayer.addEventListener('play', () => {
+      initAudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    });
+
+    // Mode Switching Listeners
+    btnCrossoverMode.addEventListener('click', () => {
+      currentMode = 'crossover';
+      btnCrossoverMode.classList.add('active');
+      btnToneMode.classList.remove('active');
+      panelCrossover.classList.add('active');
+      panelTone.classList.remove('active');
+      applyRouting();
+    });
+
+    btnToneMode.addEventListener('click', () => {
+      currentMode = 'tone';
+      btnToneMode.classList.add('active');
+      btnCrossoverMode.classList.remove('active');
+      panelTone.classList.add('active');
+      panelCrossover.classList.remove('active');
+      applyRouting();
+    });
+
+    // Crossover Controls
+    swapBtn.addEventListener('click', () => {
+      isSwapped = !isSwapped;
+      applyRouting();
+    });
+
+    lpfFreq.addEventListener('input', (e) => {
+      document.getElementById('lpfVal').innerText = `${e.target.value} Hz`;
+      if (lpf) lpf.frequency.value = e.target.value;
+    });
+
+    hpfFreq.addEventListener('input', (e) => {
+      document.getElementById('hpfVal').innerText = `${e.target.value} Hz`;
+      if (hpf) hpf.frequency.value = e.target.value;
+    });
+
+    // Tone Control Controls (Gain -12dB s/d +12dB)
+    bassGain.addEventListener('input', (e) => {
+      document.getElementById('bassVal').innerText = `${e.target.value} dB`;
+      if (bassFilter) bassFilter.gain.value = e.target.value;
+    });
+
+    midGain.addEventListener('input', (e) => {
+      document.getElementById('midVal').innerText = `${e.target.value} dB`;
+      if (midFilter) midFilter.gain.value = e.target.value;
+    });
+
+    trebleGain.addEventListener('input', (e) => {
+      document.getElementById('trebleVal').innerText = `${e.target.value} dB`;
+      if (trebleFilter) trebleFilter.gain.value = e.target.value;
+    });
+  </script>
+</body>
+</html>
   </style>
 </head>
 <body>
