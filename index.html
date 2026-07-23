@@ -3,17 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Web Audio Equalizer</title>
+  <title>Web Audio Equalizer & Playlist</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>Web Equalizer</h1>
+    <h1>Web Audio Equalizer</h1>
     
     <!-- Audio Player & Input -->
     <div class="audio-controls">
-      <input type="file" id="audio-file" accept="audio/*">
+      <!-- multiple: Mengizinkan pilih banyak file sekaligus -->
+      <label for="audio-file" class="custom-file-upload">
+        📁 Pilih Banyak Lagu (MP3/WAV)
+      </label>
+      <input type="file" id="audio-file" accept="audio/*" multiple>
+      
+      <div class="track-info" id="track-info">Belum ada lagu dipilih</div>
+      
       <audio id="audio-player" controls></audio>
+      
+      <!-- Tombol Navigasi Playlist -->
+      <div class="nav-buttons">
+        <button id="prev-btn">⏮️ Prev</button>
+        <button id="next-btn">Next ⏭️</button>
+      </div>
     </div>
 
     <!-- Visualizer Canvas -->
@@ -41,6 +54,12 @@
         <label>16 kHz</label>
         <input type="range" class="eq-band" data-freq="16000" min="-12" max="12" value="0" step="0.5">
       </div>
+    </div>
+
+    <!-- Playlist UI -->
+    <div class="playlist-container">
+      <h3>Daftar Putar</h3>
+      <ul id="playlist" class="playlist"></ul>
     </div>
   </div>
 

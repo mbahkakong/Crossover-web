@@ -1,42 +1,105 @@
 const audioInput = document.getElementById('audio-file');
 const audioPlayer = document.getElementById('audio-player');
+const trackInfo = document.getElementById('track-info');
+const playlistUI = document.getElementById('playlist');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
 const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const eqSliders = document.querySelectorAll('.eq-band');
 
+// Web Audio API State
 let audioCtx;
 let sourceNode;
 let analyser;
 let filters = [];
 
-// Resolusi Canvas
-canvas.width = 600;
-canvas.height = 150;
+// Playlist State
+let playlist = [];
+let currentTrackIndex = 0;
 
-// Handle Input File
+canvas.width = 600;
+canvas.height = 120;
+
+// Handle Upload File Banyak
 audioInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const url = URL.createObjectURL(file);
-    audioPlayer.src = url;
-    
-    // Inisialisasi Web Audio Context jika belum
-    if (!audioCtx) {
-      initAudioEngine();
-    }
+  const files = Array.from(e.target.files);
+  if (files.length > 0) {
+    playlist = files;
+    currentTrackIndex = 0;
+    renderPlaylist();
+    loadTrack(currentTrackIndex);
   }
 });
 
+// Render List Lagu di UI
+function renderPlaylist() {
+  playlistUI.innerHTML = '';
+  playlist.forEach((file, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${file.name}`;
+    if (index === currentTrackIndex) {
+      li.classList.add('active');
+    }
+    li.addEventListener('click', () => {
+      currentTrackIndex = index;
+      loadTrack(currentTrackIndex);
+    });
+    playlistUI.appendChild(li);
+  });
+}
+
+// Load dan Putar Lagu Berdasarkan Indeks
+function loadTrack(index) {
+  if (playlist.length === 0) return;
+
+  const file = playlist[index];
+  const url = URL.createObjectURL(file);
+  audioPlayer.src = url;
+  trackInfo.textContent = `▶️ ${file.name}`;
+
+  // Update Highlight Playlist
+  renderPlaylist();
+
+  // Inisialisasi Audio Engine pada pemutaran pertama
+  if (!audioCtx) {
+    initAudioEngine();
+  }
+
+  audioPlayer.play();
+}
+
+// Automatis Putar Lagu Berikutnya Saat Lagu Selesai
+audioPlayer.addEventListener('ended', () => {
+  nextTrack();
+});
+
+// Kontrol Prev & Next
+prevBtn.addEventListener('click', () => {
+  if (playlist.length === 0) return;
+  currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
+  loadTrack(currentTrackIndex);
+});
+
+nextBtn.addEventListener('click', () => {
+  nextTrack();
+});
+
+function nextTrack() {
+  if (playlist.length === 0) return;
+  currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
+  loadTrack(currentTrackIndex);
+}
+
+// Web Audio API Engine
 function initAudioEngine() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   sourceNode = audioCtx.createMediaElementSource(audioPlayer);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 64;
 
-  // Frekuensi Equalizer (60Hz - 16kHz)
   const frequencies = [60, 250, 1000, 4000, 16000];
 
-  // Buat BiquadFilterNode untuk tiap slider
   filters = frequencies.map((freq) => {
     const filter = audioCtx.createBiquadFilter();
     filter.type = freq <= 60 ? 'lowshelf' : freq >= 16000 ? 'highshelf' : 'peaking';
@@ -45,21 +108,19 @@ function initAudioEngine() {
     return filter;
   });
 
-  // Sambungkan rantai Audio: Source -> Filter1 -> Filter2 ... -> Analyser -> Output
   let prevNode = sourceNode;
   filters.forEach((filter) => {
     prevNode.connect(filter);
     prevNode = filter;
   });
-  
+
   prevNode.connect(analyser);
   analyser.connect(audioCtx.destination);
 
-  // Jalankan Visualizer
   drawVisualizer();
 }
 
-// Hubungkan Slider UI ke Gain Filter
+// Hubungkan Slider EQ
 eqSliders.forEach((slider, index) => {
   slider.addEventListener('input', (e) => {
     if (filters[index]) {
@@ -68,14 +129,14 @@ eqSliders.forEach((slider, index) => {
   });
 });
 
-// Fix autoplay policy di browser
+// Autoplay Fix
 audioPlayer.addEventListener('play', () => {
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
 });
 
-// Render animasi spektrum audio di Canvas
+// Visualizer Animation
 function drawVisualizer() {
   requestAnimationFrame(drawVisualizer);
 
@@ -92,7 +153,6 @@ function drawVisualizer() {
   for (let i = 0; i < bufferLength; i++) {
     barHeight = (dataArray[i] / 255) * canvas.height;
 
-    // Gradien Warna Bar
     const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
     gradient.addColorStop(0, '#3b82f6');
     gradient.addColorStop(1, '#8b5cf6');
